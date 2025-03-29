@@ -1,78 +1,207 @@
-import { Image, Platform, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { Link, useRouter } from 'expo-router';
+import { format } from 'date-fns';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { IconSymbol } from '@/components/ui/IconSymbol';
+import { Colors } from '@/constants/Colors';
+import { useColorScheme } from '@/hooks/useColorScheme';
 
-export default function HomeScreen() {
+// Mock data for timeline events
+const MOCK_EVENTS = [
+  {
+    id: '1',
+    name: 'Life Span',
+    startDate: new Date(1990, 0, 1),
+    endDate: new Date(2090, 0, 1),
+    color: '#4A90E2',
+    progress: 0.41,
+  },
+  {
+    id: '2',
+    name: 'Current Project',
+    startDate: new Date(2025, 2, 1),
+    endDate: new Date(2025, 6, 30),
+    color: '#E2844A',
+    progress: 0.35,
+  },
+  {
+    id: '3',
+    name: '2025 Goals',
+    startDate: new Date(2025, 0, 1),
+    endDate: new Date(2025, 11, 31),
+    color: '#50C878',
+    progress: 0.23,
+  },
+  {
+    id: '4',
+    name: 'Annual Family Trip',
+    startDate: new Date(2025, 6, 1),
+    endDate: new Date(2025, 6, 14),
+    color: '#9370DB',
+    progress: 0,
+  },
+];
+
+export default function TimelineScreen() {
+  const colorScheme = useColorScheme();
+  const router = useRouter();
+  const [events] = useState(MOCK_EVENTS);
+  
+  const formatDateRange = (start, end) => {
+    return `${format(start, 'MMM d, yyyy')} - ${format(end, 'MMM d, yyyy')}`;
+  };
+  
+  const renderProgressBar = (progress, color) => {
+    const progressPercentage = Math.round(progress * 100);
+    
+    return (
+      <ThemedView style={styles.progressContainer}>
+        <ThemedView style={[styles.progressBar, { backgroundColor: colorScheme === 'dark' ? '#444' : '#E0E0E0' }]}>
+          <ThemedView 
+            style={[
+              styles.progressFill, 
+              { 
+                width: `${progressPercentage}%`,
+                backgroundColor: color,
+              }
+            ]} 
+          />
+        </ThemedView>
+        <ThemedText style={styles.progressText}>{progressPercentage}%</ThemedText>
+      </ThemedView>
+    );
+  };
+  
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }
-    >
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
+    <ScrollView style={styles.container}>
+      <ThemedView style={styles.header}>
+        <ThemedText type="title">My Timeline</ThemedText>
+        <Link href="/(tabs)/create" asChild>
+          <TouchableOpacity style={styles.addButton}>
+            <IconSymbol name="plus" size={20} color="#FFF" />
+          </TouchableOpacity>
+        </Link>
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText>{' '}
-          to see changes. Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this
-          starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText>{' '}
-          to get a fresh <ThemedText type="defaultSemiBold">app</ThemedText>{' '}
-          directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      
+      {events.length === 0 ? (
+        <ThemedView style={styles.emptyState}>
+          <IconSymbol name="clock" size={50} color="#808080" />
+          <ThemedText style={styles.emptyStateText}>
+            No timeline events yet. Tap the + button to create one!
+          </ThemedText>
+        </ThemedView>
+      ) : (
+        <ThemedView style={styles.eventsList}>
+          {events.map((event) => (
+            <TouchableOpacity 
+              key={event.id} 
+              style={styles.eventCard}
+              onPress={() => router.push(`/event/${event.id}`)}
+            >
+              <ThemedView style={styles.eventHeader}>
+                <ThemedText style={styles.eventName}>{event.name}</ThemedText>
+                <IconSymbol name="ellipsis" size={20} color="#808080" />
+              </ThemedView>
+              
+              <ThemedText style={styles.dateRange}>
+                {formatDateRange(event.startDate, event.endDate)}
+              </ThemedText>
+              
+              {renderProgressBar(event.progress, event.color)}
+            </TouchableOpacity>
+          ))}
+        </ThemedView>
+      )}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    flex: 1,
+    backgroundColor: 'transparent',
   },
-  stepContainer: {
-    gap: 8,
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 16,
+  },
+  addButton: {
+    backgroundColor: Colors.light.tint,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    margin: 20,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderStyle: 'dashed',
+  },
+  emptyStateText: {
+    textAlign: 'center',
+    marginTop: 16,
+    fontSize: 16,
+  },
+  eventsList: {
+    padding: 16,
+  },
+  eventCard: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    backgroundColor: Colors.light.cardBackground,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  eventHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  eventName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  dateRange: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  progressBar: {
+    flex: 1,
+    height: 10,
+    borderRadius: 5,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 5,
+  },
+  progressText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });
