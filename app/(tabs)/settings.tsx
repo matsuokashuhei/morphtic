@@ -1,79 +1,273 @@
-import React from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/src/context/ThemeContext';
+import { Stack } from 'expo-router';
 
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import { IconSymbol } from '@/components/ui/IconSymbol';
-import { Colors } from '@/constants/Colors';
-import { useColorScheme } from '@/hooks/useColorScheme';
-
-export default function SettingsScreen() {
-  const colorScheme = useColorScheme();
-  
-  const settingsSections = [
-    {
-      title: 'Account',
-      items: [
-        { icon: 'person.crop.circle', title: 'Profile', action: () => {} },
-        { icon: 'icloud', title: 'Sync Settings', action: () => {} },
-      ]
-    },
-    {
-      title: 'Appearance',
-      items: [
-        { icon: 'paintbrush', title: 'Theme', action: () => {} },
-        { icon: 'textformat.size', title: 'Text Size', action: () => {} },
-      ]
-    },
-    {
-      title: 'Widget',
-      items: [
-        { icon: 'rectangle.on.rectangle', title: 'Widget Settings', action: () => {} },
-        { icon: 'bell', title: 'Notifications', action: () => {} },
-      ]
-    },
-    {
-      title: 'About',
-      items: [
-        { icon: 'info.circle', title: 'App Info', action: () => {} },
-        { icon: 'questionmark.circle', title: 'Help & Support', action: () => {} },
-      ]
-    },
-  ];
+const SettingItem = ({ icon, title, description, value, onValueChange, type = 'switch' }) => {
+  const { colors } = useTheme();
   
   return (
-    <ScrollView style={styles.container}>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Settings</ThemedText>
-      </ThemedView>
+    <TouchableOpacity 
+      style={styles.settingItem}
+      onPress={() => {
+        if (type === 'button') {
+          onValueChange?.();
+        } else if (type === 'switch') {
+          onValueChange?.(!value);
+        }
+      }}
+    >
+      <View style={styles.settingItemLeft}>
+        <View style={[styles.iconContainer, { backgroundColor: colors.card }]}>
+          <Ionicons name={icon} size={22} color={colors.primary} />
+        </View>
+        <View style={styles.settingTextContainer}>
+          <Text style={[styles.settingTitle, { color: colors.text }]}>
+            {title}
+          </Text>
+          {description && (
+            <Text style={[styles.settingDescription, { color: colors.secondaryText }]}>
+              {description}
+            </Text>
+          )}
+        </View>
+      </View>
       
-      {settingsSections.map((section, sectionIndex) => (
-        <ThemedView key={sectionIndex} style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>{section.title}</ThemedText>
+      {type === 'switch' && (
+        <Switch
+          value={value}
+          onValueChange={onValueChange}
+          trackColor={{ false: '#E0E0E0', true: colors.primary + '50' }}
+          thumbColor={value ? colors.primary : '#F5F5F5'}
+        />
+      )}
+      
+      {type === 'button' && (
+        <Ionicons name="chevron-forward" size={22} color={colors.secondaryText} />
+      )}
+      
+      {type === 'value' && (
+        <Text style={{ color: colors.secondaryText }}>
+          {value}
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+};
+
+export default function SettingsScreen() {
+  const { theme, setTheme, colors, isDarkMode } = useTheme();
+  
+  // 設定状態
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [showCompleted, setShowCompleted] = useState(true);
+  const [widgetUpdateFrequency, setWidgetUpdateFrequency] = useState('hourly');
+  
+  // テーマ変更ハンドラ
+  const handleThemeChange = () => {
+    Alert.alert(
+      'テーマ設定',
+      '使用するテーマを選択してください',
+      [
+        {
+          text: 'システム設定に合わせる',
+          onPress: () => setTheme('system'),
+        },
+        {
+          text: 'ライトモード',
+          onPress: () => setTheme('light'),
+        },
+        {
+          text: 'ダークモード',
+          onPress: () => setTheme('dark'),
+        },
+        {
+          text: 'キャンセル',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+  
+  // ウィジェット更新間隔変更ハンドラ
+  const handleWidgetUpdateFrequencyChange = () => {
+    Alert.alert(
+      'ウィジェット更新頻度',
+      '更新頻度を選択してください',
+      [
+        {
+          text: 'リアルタイム',
+          onPress: () => setWidgetUpdateFrequency('realtime'),
+        },
+        {
+          text: '1時間ごと',
+          onPress: () => setWidgetUpdateFrequency('hourly'),
+        },
+        {
+          text: '1日ごと',
+          onPress: () => setWidgetUpdateFrequency('daily'),
+        },
+        {
+          text: 'キャンセル',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+  
+  // ログアウトハンドラ
+  const handleLogout = () => {
+    Alert.alert(
+      'ログアウト',
+      'ログアウトしてもよろしいですか？',
+      [
+        {
+          text: 'キャンセル',
+          style: 'cancel',
+        },
+        {
+          text: 'ログアウト',
+          style: 'destructive',
+          onPress: () => {
+            // ログアウト処理
+            // この実装では簡単にAlertで知らせるだけ
+            Alert.alert('Info', 'ログアウト機能は開発中です');
+          },
+        },
+      ]
+    );
+  };
+  
+  return (
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+      <Stack.Screen options={{ title: '設定' }} />
+      
+      {/* 表示設定 */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>表示設定</Text>
+        
+        <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
+          <SettingItem
+            icon="color-palette-outline"
+            title="テーマ"
+            description="ダーク/ライトモードを切り替えます"
+            value={theme === 'system' ? 'システム設定に合わせる' : theme === 'dark' ? 'ダークモード' : 'ライトモード'}
+            onValueChange={handleThemeChange}
+            type="button"
+          />
           
-          {section.items.map((item, itemIndex) => (
-            <TouchableOpacity 
-              key={itemIndex} 
-              style={styles.settingItem}
-              onPress={item.action}
-            >
-              <IconSymbol 
-                name={item.icon} 
-                size={22} 
-                color={Colors[colorScheme ?? 'light'].tint} 
-                style={styles.itemIcon}
-              />
-              <ThemedText style={styles.itemTitle}>{item.title}</ThemedText>
-              <IconSymbol 
-                name="chevron.right" 
-                size={16} 
-                color="#8E8E93" 
-                style={styles.chevron}
-              />
-            </TouchableOpacity>
-          ))}
-        </ThemedView>
-      ))}
+          <View style={[styles.separator, { backgroundColor: colors.border }]} />
+          
+          <SettingItem
+            icon="checkmark-circle-outline"
+            title="完了したイベントを表示"
+            description="一覧に完了したイベントを表示します"
+            value={showCompleted}
+            onValueChange={setShowCompleted}
+          />
+        </View>
+      </View>
+      
+      {/* ウィジェット設定 */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>ウィジェット設定</Text>
+        
+        <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
+          <SettingItem
+            icon="refresh-outline"
+            title="更新頻度"
+            description="ウィジェットの更新頻度を設定します"
+            value={widgetUpdateFrequency === 'realtime' ? 'リアルタイム' : widgetUpdateFrequency === 'hourly' ? '1時間ごと' : '1日ごと'}
+            onValueChange={handleWidgetUpdateFrequencyChange}
+            type="button"
+          />
+        </View>
+      </View>
+      
+      {/* 通知設定 */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>通知設定</Text>
+        
+        <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
+          <SettingItem
+            icon="notifications-outline"
+            title="通知"
+            description="イベントの通知を有効にします"
+            value={notificationsEnabled}
+            onValueChange={setNotificationsEnabled}
+          />
+        </View>
+      </View>
+      
+      {/* アカウント設定 */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>アカウント</Text>
+        
+        <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
+          <SettingItem
+            icon="person-outline"
+            title="アカウント情報"
+            description="アカウント詳細と設定"
+            onValueChange={() => Alert.alert('Info', 'アカウント設定は開発中です')}
+            type="button"
+          />
+          
+          <View style={[styles.separator, { backgroundColor: colors.border }]} />
+          
+          <SettingItem
+            icon="cloud-outline"
+            title="データを同期"
+            description="クラウドとデータを同期します"
+            onValueChange={() => Alert.alert('Info', 'データ同期は開発中です')}
+            type="button"
+          />
+          
+          <View style={[styles.separator, { backgroundColor: colors.border }]} />
+          
+          <SettingItem
+            icon="log-out-outline"
+            title="ログアウト"
+            description="アカウントからログアウトします"
+            onValueChange={handleLogout}
+            type="button"
+          />
+        </View>
+      </View>
+      
+      {/* アプリ情報 */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>アプリ情報</Text>
+        
+        <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
+          <SettingItem
+            icon="information-circle-outline"
+            title="バージョン"
+            value="1.0.0"
+            type="value"
+          />
+          
+          <View style={[styles.separator, { backgroundColor: colors.border }]} />
+          
+          <SettingItem
+            icon="document-text-outline"
+            title="ライセンス"
+            description="オープンソースライセンス情報"
+            onValueChange={() => Alert.alert('Info', 'ライセンス情報は開発中です')}
+            type="button"
+          />
+          
+          <View style={[styles.separator, { backgroundColor: colors.border }]} />
+          
+          <SettingItem
+            icon="heart-outline"
+            title="アプリを評価する"
+            description="App Storeでこのアプリを評価"
+            onValueChange={() => Alert.alert('Info', '評価機能は開発中です')}
+            type="button"
+          />
+        </View>
+      </View>
     </ScrollView>
   );
 }
@@ -83,33 +277,51 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  titleContainer: {
-    marginTop: 20,
-    marginBottom: 16,
-  },
   section: {
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 12,
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 8,
+    marginLeft: 12,
+  },
+  sectionContent: {
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   settingItem: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#CCCCCC',
+    padding: 16,
   },
-  itemIcon: {
+  settingItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  iconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
-  itemTitle: {
+  settingTextContainer: {
     flex: 1,
-    fontSize: 16,
   },
-  chevron: {
-    marginLeft: 'auto',
+  settingTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  settingDescription: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  separator: {
+    height: 1,
+    marginHorizontal: 16,
   },
 });

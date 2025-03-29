@@ -1,207 +1,231 @@
-import React, { useState } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
-import { Link, useRouter } from 'expo-router';
-import { format } from 'date-fns';
+import { StyleSheet, ScrollView, View, Text, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import { IconSymbol } from '@/components/ui/IconSymbol';
-import { Colors } from '@/constants/Colors';
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { useEvents } from '@/src/context/EventContext';
+import { useTheme } from '@/src/context/ThemeContext';
+import EventCard from '@/src/components/events/EventCard';
+import { Event } from '@/src/types';
+import { getEventStatus } from '@/src/utils/progressUtils';
 
-// Mock data for timeline events
-const MOCK_EVENTS = [
-  {
-    id: '1',
-    name: 'Life Span',
-    startDate: new Date(1990, 0, 1),
-    endDate: new Date(2090, 0, 1),
-    color: '#4A90E2',
-    progress: 0.41,
-  },
-  {
-    id: '2',
-    name: 'Current Project',
-    startDate: new Date(2025, 2, 1),
-    endDate: new Date(2025, 6, 30),
-    color: '#E2844A',
-    progress: 0.35,
-  },
-  {
-    id: '3',
-    name: '2025 Goals',
-    startDate: new Date(2025, 0, 1),
-    endDate: new Date(2025, 11, 31),
-    color: '#50C878',
-    progress: 0.23,
-  },
-  {
-    id: '4',
-    name: 'Annual Family Trip',
-    startDate: new Date(2025, 6, 1),
-    endDate: new Date(2025, 6, 14),
-    color: '#9370DB',
-    progress: 0,
-  },
-];
+type FilterType = 'all' | 'active' | 'completed';
 
-export default function TimelineScreen() {
-  const colorScheme = useColorScheme();
-  const router = useRouter();
-  const [events] = useState(MOCK_EVENTS);
-  
-  const formatDateRange = (start, end) => {
-    return `${format(start, 'MMM d, yyyy')} - ${format(end, 'MMM d, yyyy')}`;
-  };
-  
-  const renderProgressBar = (progress, color) => {
-    const progressPercentage = Math.round(progress * 100);
+export default function EventsScreen() {
+  const { events, loading, error, refreshEvents } = useEvents();
+  const { colors, isDarkMode } = useTheme();
+  const [filter, setFilter] = useState<FilterType>('active');
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  // ナビゲーションのフォーカス時にイベントを更新
+  useFocusEffect(
+    useCallback(() => {
+      refreshEvents();
+    }, [])
+  );
+
+  // イベントフィルタリング
+  const filteredEvents = events.filter(event => {
+    if (filter === 'all') return true;
     
-    return (
-      <ThemedView style={styles.progressContainer}>
-        <ThemedView style={[styles.progressBar, { backgroundColor: colorScheme === 'dark' ? '#444' : '#E0E0E0' }]}>
-          <ThemedView 
-            style={[
-              styles.progressFill, 
-              { 
-                width: `${progressPercentage}%`,
-                backgroundColor: color,
-              }
-            ]} 
-          />
-        </ThemedView>
-        <ThemedText style={styles.progressText}>{progressPercentage}%</ThemedText>
-      </ThemedView>
+    const status = getEventStatus(
+      new Date(event.startDate), 
+      new Date(event.endDate)
     );
+    
+    if (filter === 'active') return status !== 'completed';
+    if (filter === 'completed') return status === 'completed';
+    return true;
+  });
+
+  // イベント詳細画面に遷移
+  const handleEventPress = (event: Event) => {
+    router.push(`/event/${event.id}`);
   };
-  
+
+  // 新規イベント作成画面に遷移
+  const handleCreateEvent = () => {
+    router.push('/create');
+  };
+
+  // プルダウンリフレッシュ
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refreshEvents();
+    setRefreshing(false);
+  };
+
+  // スタイルを動的に生成
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      backgroundColor: colors.primary,
+      padding: 16,
+      paddingTop: 48,
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: 'white',
+    },
+    filterContainer: {
+      flexDirection: 'row',
+      backgroundColor: colors.card,
+      padding: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    filterButton: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 8,
+      borderRadius: 20,
+    },
+    activeFilter: {
+      backgroundColor: isDarkMode ? 'rgba(76, 175, 80, 0.2)' : '#E8F5E9',
+    },
+    filterText: {
+      fontSize: 14,
+      color: colors.secondaryText,
+    },
+    activeFilterText: {
+      color: colors.primary,
+      fontWeight: 'bold',
+    },
+    listContainer: {
+      padding: 16,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    errorContainer: {
+      padding: 16,
+      backgroundColor: colors.error + '20', // 透明度を追加
+      margin: 16,
+      borderRadius: 8,
+    },
+    errorText: {
+      color: colors.error,
+    },
+    emptyContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 32,
+    },
+    emptyText: {
+      fontSize: 16,
+      color: colors.secondaryText,
+      marginTop: 16,
+      marginBottom: 24,
+      textAlign: 'center',
+    },
+    emptyButton: {
+      backgroundColor: colors.primary,
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: 24,
+    },
+    emptyButtonText: {
+      color: 'white',
+      fontWeight: 'bold',
+    },
+    fab: {
+      position: 'absolute',
+      bottom: 24,
+      right: 24,
+      backgroundColor: colors.primary,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      justifyContent: 'center',
+      alignItems: 'center',
+      elevation: 4,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 3.84,
+    },
+  });
+
   return (
-    <ScrollView style={styles.container}>
-      <ThemedView style={styles.header}>
-        <ThemedText type="title">My Timeline</ThemedText>
-        <Link href="/(tabs)/create" asChild>
-          <TouchableOpacity style={styles.addButton}>
-            <IconSymbol name="plus" size={20} color="#FFF" />
-          </TouchableOpacity>
-        </Link>
-      </ThemedView>
-      
-      {events.length === 0 ? (
-        <ThemedView style={styles.emptyState}>
-          <IconSymbol name="clock" size={50} color="#808080" />
-          <ThemedText style={styles.emptyStateText}>
-            No timeline events yet. Tap the + button to create one!
-          </ThemedText>
-        </ThemedView>
-      ) : (
-        <ThemedView style={styles.eventsList}>
-          {events.map((event) => (
-            <TouchableOpacity 
-              key={event.id} 
-              style={styles.eventCard}
-              onPress={() => router.push(`/event/${event.id}`)}
-            >
-              <ThemedView style={styles.eventHeader}>
-                <ThemedText style={styles.eventName}>{event.name}</ThemedText>
-                <IconSymbol name="ellipsis" size={20} color="#808080" />
-              </ThemedView>
-              
-              <ThemedText style={styles.dateRange}>
-                {formatDateRange(event.startDate, event.endDate)}
-              </ThemedText>
-              
-              {renderProgressBar(event.progress, event.color)}
-            </TouchableOpacity>
-          ))}
-        </ThemedView>
+    <View style={dynamicStyles.container}>
+      {/* フィルターコントロール */}
+      <View style={dynamicStyles.filterContainer}>
+        <TouchableOpacity
+          style={[dynamicStyles.filterButton, filter === 'all' && dynamicStyles.activeFilter]}
+          onPress={() => setFilter('all')}
+        >
+          <Text style={[dynamicStyles.filterText, filter === 'all' && dynamicStyles.activeFilterText]}>
+            すべて
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[dynamicStyles.filterButton, filter === 'active' && dynamicStyles.activeFilter]}
+          onPress={() => setFilter('active')}
+        >
+          <Text style={[dynamicStyles.filterText, filter === 'active' && dynamicStyles.activeFilterText]}>
+            進行中
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[dynamicStyles.filterButton, filter === 'completed' && dynamicStyles.activeFilter]}
+          onPress={() => setFilter('completed')}
+        >
+          <Text style={[dynamicStyles.filterText, filter === 'completed' && dynamicStyles.activeFilterText]}>
+            完了
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* エラー表示 */}
+      {error && (
+        <View style={dynamicStyles.errorContainer}>
+          <Text style={dynamicStyles.errorText}>{error}</Text>
+        </View>
       )}
-    </ScrollView>
+
+      {/* イベントリスト */}
+      {loading && !refreshing ? (
+        <View style={dynamicStyles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : filteredEvents.length === 0 ? (
+        <View style={dynamicStyles.emptyContainer}>
+          <Ionicons name="calendar-outline" size={64} color={colors.border} />
+          <Text style={dynamicStyles.emptyText}>
+            {filter === 'all'
+              ? 'イベントがありません'
+              : filter === 'active'
+              ? '進行中のイベントがありません'
+              : '完了したイベントがありません'}
+          </Text>
+          <TouchableOpacity style={dynamicStyles.emptyButton} onPress={() => router.push('/create')}>
+            <Text style={dynamicStyles.emptyButtonText}>イベントを作成</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={dynamicStyles.listContainer}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          {filteredEvents.map((event) => (
+            <EventCard 
+              key={event.id} 
+              event={event} 
+              onPress={handleEventPress} 
+            />
+          ))}
+        </ScrollView>
+      )}
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 16,
-  },
-  addButton: {
-    backgroundColor: Colors.light.tint,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-    margin: 20,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderStyle: 'dashed',
-  },
-  emptyStateText: {
-    textAlign: 'center',
-    marginTop: 16,
-    fontSize: 16,
-  },
-  eventsList: {
-    padding: 16,
-  },
-  eventCard: {
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    backgroundColor: Colors.light.cardBackground,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  eventHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  eventName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  dateRange: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
-  },
-  progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  progressBar: {
-    flex: 1,
-    height: 10,
-    borderRadius: 5,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 5,
-  },
-  progressText: {
-    marginLeft: 8,
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-});

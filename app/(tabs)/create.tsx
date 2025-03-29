@@ -1,247 +1,368 @@
 import React, { useState } from 'react';
-import { 
-  StyleSheet, 
-  ScrollView, 
-  TextInput, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
   Switch,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
   Platform,
-  Alert
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { Ionicons } from '@expo/vector-icons';
+import { router, Stack } from 'expo-router';
 
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import { IconSymbol } from '@/components/ui/IconSymbol';
-import { Colors } from '@/constants/Colors';
-import { useColorScheme } from '@/hooks/useColorScheme';
+// コンテキスト
+import { useEvents } from '@/src/context/EventContext';
+import { useTheme } from '@/src/context/ThemeContext';
 
-// Predefined color options
-const COLOR_OPTIONS = [
-  '#4A90E2', // Blue
-  '#50C878', // Green
-  '#E2844A', // Orange
-  '#9370DB', // Purple
-  '#FF6B6B', // Red
-  '#FFD700', // Yellow
-];
+// コンポーネント
+import ColorPicker from '@/src/components/common/ColorPicker';
+
+// 型
+import { EventRepeat } from '@/src/types';
 
 export default function CreateEventScreen() {
-  const router = useRouter();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const { addEvent } = useEvents();
+  const { colors, isDarkMode } = useTheme();
   
-  // Form state
-  const [eventName, setEventName] = useState('');
-  const [description, setDescription] = useState('');
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)); // Default to 30 days from now
-  const [selectedColor, setSelectedColor] = useState(COLOR_OPTIONS[0]);
-  const [isRepeat, setIsRepeat] = useState(false);
-  const [repeatFrequency, setRepeatFrequency] = useState('monthly');
+  // フォーム状態
+  const [name, setName] = useState<string>('');
+  const [description, setDescription] = useState<string>('');
+  const [startDate, setStartDate] = useState<Date>(new Date());
+  const [endDate, setEndDate] = useState<Date>(() => {
+    const date = new Date();
+    date.setMonth(date.getMonth() + 1); // デフォルトは1ヶ月後
+    return date;
+  });
+  const [color, setColor] = useState<string>('#4CAF50');
+  const [showInWidget, setShowInWidget] = useState<boolean>(true);
+  const [enableRepeat, setEnableRepeat] = useState<boolean>(false);
+  const [repeatType, setRepeatType] = useState<EventRepeat['type']>('none');
+  const [repeatInterval, setRepeatInterval] = useState<number>(1);
   
-  // Date picker state
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  // 日時ピッカーの表示状態
+  const [showStartDatePicker, setShowStartDatePicker] = useState<boolean>(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState<boolean>(false);
   
-  const handleCreateEvent = () => {
-    // Validate form
-    if (!eventName.trim()) {
-      Alert.alert('Error', 'Please enter an event name');
-      return;
-    }
-    
-    if (startDate >= endDate) {
-      Alert.alert('Error', 'End date must be after start date');
-      return;
-    }
-    
-    // In a real app, this would save to a database
-    Alert.alert(
-      'Success',
-      'Event created successfully!',
-      [
-        {
-          text: 'OK',
-          onPress: () => router.replace('/(tabs)'),
-        },
-      ]
-    );
+  // 送信中状態
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  
+  // フォームのバリデーション
+  const isFormValid = (): boolean => {
+    if (!name.trim()) return false;
+    if (startDate >= endDate) return false;
+    return true;
   };
   
-  const onStartDateChange = (event, selectedDate) => {
+  // イベント作成
+  const handleCreateEvent = async (): Promise<void> => {
+    if (!isFormValid()) {
+      Alert.alert(
+        'エラー',
+        '入力内容に問題があります。イベント名を入力し、終了日が開始日より後であることを確認してください。'
+      );
+      return;
+    }
+    
+    try {
+      setIsSubmitting(true);
+      
+      const repeat = enableRepeat
+        ? {
+            type: repeatType,
+            interval: repeatInterval,
+            endAfter: null,
+            endDate: null,
+          }
+        : undefined;
+      
+      await addEvent({
+        name,
+        description,
+        startDate,
+        endDate,
+        color,
+        repeat,
+        showInWidget,
+        widgetPosition: 0, // デフォルト位置
+        notifyAt: [], // 通知設定なし
+      });
+      
+      router.back();
+    } catch (error) {
+      console.error('Failed to create event:', error);
+      Alert.alert(
+        'エラー',
+        'イベントの作成に失敗しました。もう一度お試しください。'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  // 日付変更ハンドラ
+  const handleStartDateChange = (event: any, selectedDate?: Date): void => {
     setShowStartDatePicker(false);
     if (selectedDate) {
       setStartDate(selectedDate);
+      // 終了日が開始日より前の場合、終了日を更新
+      if (endDate <= selectedDate) {
+        const newEndDate = new Date(selectedDate);
+        newEndDate.setMonth(newEndDate.getMonth() + 1);
+        setEndDate(newEndDate);
+      }
     }
   };
   
-  const onEndDateChange = (event, selectedDate) => {
+  const handleEndDateChange = (event: any, selectedDate?: Date): void => {
     setShowEndDatePicker(false);
     if (selectedDate) {
       setEndDate(selectedDate);
     }
   };
   
-  const formatDate = (date) => {
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+  // 繰り返し設定の表示・非表示
+  const renderRepeatSettings = (): React.ReactNode => {
+    if (!enableRepeat) return null;
+    
+    return (
+      <View style={[styles.repeatContainer, { backgroundColor: isDarkMode ? colors.card : '#F5F5F5' }]}>
+        <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>繰り返し設定</Text>
+        
+        <View style={styles.repeatTypeContainer}>
+          {['daily', 'weekly', 'monthly', 'yearly'].map((type) => (
+            <TouchableOpacity
+              key={type}
+              style={[
+                styles.repeatTypeButton,
+                { borderColor: colors.border, backgroundColor: isDarkMode ? colors.background : 'white' },
+                repeatType === type && [styles.repeatTypeButtonActive, { borderColor: colors.primary, backgroundColor: isDarkMode ? 'rgba(76, 175, 80, 0.2)' : '#E8F5E9' }],
+              ]}
+              onPress={() => setRepeatType(type as EventRepeat['type'])}
+            >
+              <Text
+                style={[
+                  styles.repeatTypeText,
+                  { color: colors.secondaryText },
+                  repeatType === type && [styles.repeatTypeTextActive, { color: colors.primary }],
+                ]}
+              >
+                {type === 'daily'
+                  ? '毎日'
+                  : type === 'weekly'
+                  ? '毎週'
+                  : type === 'monthly'
+                  ? '毎月'
+                  : '毎年'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        
+        <View style={styles.repeatIntervalContainer}>
+          <Text style={[styles.repeatIntervalLabel, { color: colors.text }]}>間隔:</Text>
+          <TextInput
+            style={[styles.repeatIntervalInput, { borderColor: colors.border, backgroundColor: isDarkMode ? colors.background : 'white', color: colors.text }]}
+            value={repeatInterval.toString()}
+            onChangeText={(text) => {
+              const number = parseInt(text);
+              if (!isNaN(number) && number > 0) {
+                setRepeatInterval(number);
+              }
+            }}
+            keyboardType="numeric"
+          />
+          <Text style={[styles.repeatIntervalUnit, { color: colors.text }]}>
+            {repeatType === 'daily'
+              ? '日'
+              : repeatType === 'weekly'
+              ? '週'
+              : repeatType === 'monthly'
+              ? 'ヶ月'
+              : '年'}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+  
+  // 動的スタイル
+  const dynamicStyles = {
+    container: {
+      backgroundColor: colors.background,
+    },
+    label: {
+      color: colors.text,
+    },
+    input: {
+      backgroundColor: isDarkMode ? colors.card : '#F5F5F5',
+      borderColor: colors.border,
+      color: colors.text,
+    },
   };
   
   return (
-    <ScrollView style={styles.container}>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Create Timeline Event</ThemedText>
-      </ThemedView>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <Stack.Screen options={{ title: '新規イベント' }} />
       
-      <ThemedText style={styles.description}>
-        Track life events, projects, or any time period to visualize your progress.
-      </ThemedText>
-      
-      <ThemedView style={styles.formContainer}>
-        <ThemedView style={styles.formGroup}>
-          <ThemedText style={styles.label}>Event Name</ThemedText>
+      <ScrollView style={[styles.container, dynamicStyles.container]}>
+        {/* イベント名 */}
+        <View style={styles.formGroup}>
+          <Text style={[styles.label, dynamicStyles.label]}>イベント名 *</Text>
           <TextInput
-            style={[
-              styles.input,
-              isDark && styles.inputDark
-            ]}
-            value={eventName}
-            onChangeText={setEventName}
-            placeholder="Enter event name"
-            placeholderTextColor="#999"
+            style={[styles.input, dynamicStyles.input]}
+            value={name}
+            onChangeText={setName}
+            placeholder="イベント名を入力"
+            placeholderTextColor={isDarkMode ? '#888888' : '#AAAAAA'}
           />
-        </ThemedView>
+        </View>
         
-        <ThemedView style={styles.formGroup}>
-          <ThemedText style={styles.label}>Description</ThemedText>
+        {/* 説明 */}
+        <View style={styles.formGroup}>
+          <Text style={[styles.label, dynamicStyles.label]}>説明（オプション）</Text>
           <TextInput
-            style={[
-              styles.input,
-              styles.textArea,
-              isDark && styles.inputDark
-            ]}
+            style={[styles.input, styles.textArea, dynamicStyles.input]}
             value={description}
             onChangeText={setDescription}
-            placeholder="What's this event about?"
-            placeholderTextColor="#999"
+            placeholder="イベントの説明を入力"
+            placeholderTextColor={isDarkMode ? '#888888' : '#AAAAAA'}
             multiline
-            numberOfLines={4}
-            textAlignVertical="top"
+            numberOfLines={3}
           />
-        </ThemedView>
+        </View>
         
-        <ThemedView style={styles.formGroup}>
-          <ThemedText style={styles.label}>Start Date</ThemedText>
-          <TouchableOpacity 
-            style={[
-              styles.dateInput,
-              isDark && styles.dateInputDark
-            ]} 
+        {/* 開始日時 */}
+        <View style={styles.formGroup}>
+          <Text style={[styles.label, dynamicStyles.label]}>開始日時 *</Text>
+          <TouchableOpacity
+            style={[styles.datePickerButton, { backgroundColor: isDarkMode ? colors.card : '#F5F5F5', borderColor: colors.border }]}
             onPress={() => setShowStartDatePicker(true)}
           >
-            <IconSymbol name="calendar" size={20} color="#666" style={styles.dateIcon} />
-            <ThemedText>{formatDate(startDate)}</ThemedText>
+            <Text style={{ color: colors.text }}>
+              {startDate.toLocaleDateString()} {startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+            <Ionicons name="calendar-outline" size={24} color={colors.secondaryText} />
           </TouchableOpacity>
           
           {showStartDatePicker && (
             <DateTimePicker
               value={startDate}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={onStartDateChange}
+              mode="datetime"
+              is24Hour={true}
+              display="default"
+              onChange={handleStartDateChange}
             />
           )}
-        </ThemedView>
+        </View>
         
-        <ThemedView style={styles.formGroup}>
-          <ThemedText style={styles.label}>End Date</ThemedText>
-          <TouchableOpacity 
-            style={[
-              styles.dateInput,
-              isDark && styles.dateInputDark
-            ]} 
+        {/* 終了日時 */}
+        <View style={styles.formGroup}>
+          <Text style={[styles.label, dynamicStyles.label]}>終了日時 *</Text>
+          <TouchableOpacity
+            style={[styles.datePickerButton, { backgroundColor: isDarkMode ? colors.card : '#F5F5F5', borderColor: colors.border }]}
             onPress={() => setShowEndDatePicker(true)}
           >
-            <IconSymbol name="calendar" size={20} color="#666" style={styles.dateIcon} />
-            <ThemedText>{formatDate(endDate)}</ThemedText>
+            <Text style={{ color: colors.text }}>
+              {endDate.toLocaleDateString()} {endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+            <Ionicons name="calendar-outline" size={24} color={colors.secondaryText} />
           </TouchableOpacity>
           
           {showEndDatePicker && (
             <DateTimePicker
               value={endDate}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={onEndDateChange}
-              minimumDate={startDate}
+              mode="datetime"
+              is24Hour={true}
+              display="default"
+              onChange={handleEndDateChange}
             />
           )}
-        </ThemedView>
+        </View>
         
-        <ThemedView style={styles.formGroup}>
-          <ThemedText style={styles.label}>Color</ThemedText>
-          <ThemedView style={styles.colorOptions}>
-            {COLOR_OPTIONS.map((color, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.colorOption,
-                  { backgroundColor: color },
-                  selectedColor === color && styles.selectedColorOption,
-                ]}
-                onPress={() => setSelectedColor(color)}
-              />
-            ))}
-          </ThemedView>
-        </ThemedView>
+        {/* プログレスバーの色 */}
+        <View style={styles.formGroup}>
+          <Text style={[styles.label, dynamicStyles.label]}>プログレスバーの色</Text>
+          <ColorPicker
+            selectedColor={color}
+            onSelectColor={setColor}
+            colors={[
+              '#4CAF50', // Green
+              '#2196F3', // Blue
+              '#F44336', // Red
+              '#FFC107', // Amber
+              '#9C27B0', // Purple
+              '#FF9800', // Orange
+              '#795548', // Brown
+              '#607D8B', // Blue Grey
+            ]}
+          />
+        </View>
         
-        <ThemedView style={styles.formGroup}>
-          <ThemedView style={styles.switchContainer}>
-            <ThemedText style={styles.label}>Repeating Event</ThemedText>
+        {/* 繰り返し設定 */}
+        <View style={styles.formGroup}>
+          <View style={styles.switchContainer}>
+            <Text style={[styles.label, dynamicStyles.label]}>繰り返し</Text>
             <Switch
-              value={isRepeat}
-              onValueChange={setIsRepeat}
-              trackColor={{ false: '#767577', true: Colors[colorScheme].tint }}
+              value={enableRepeat}
+              onValueChange={setEnableRepeat}
+              trackColor={{ false: '#E0E0E0', true: isDarkMode ? 'rgba(76, 175, 80, 0.5)' : '#A5D6A7' }}
+              thumbColor={enableRepeat ? colors.primary : isDarkMode ? '#888888' : '#F5F5F5'}
             />
-          </ThemedView>
-          
-          {isRepeat && (
-            <ThemedView style={styles.repeatOptions}>
-              {['daily', 'weekly', 'monthly', 'yearly'].map((freq) => (
-                <TouchableOpacity
-                  key={freq}
-                  style={[
-                    styles.repeatOption,
-                    repeatFrequency === freq && styles.selectedRepeatOption,
-                  ]}
-                  onPress={() => setRepeatFrequency(freq)}
-                >
-                  <ThemedText
-                    style={[
-                      styles.repeatOptionText,
-                      repeatFrequency === freq && styles.selectedRepeatOptionText,
-                    ]}
-                  >
-                    {freq.charAt(0).toUpperCase() + freq.slice(1)}
-                  </ThemedText>
-                </TouchableOpacity>
-              ))}
-            </ThemedView>
-          )}
-        </ThemedView>
+          </View>
+          {renderRepeatSettings()}
+        </View>
         
-        <TouchableOpacity
-          style={styles.createButton}
-          onPress={handleCreateEvent}
-        >
-          <ThemedText style={styles.createButtonText}>Create Event</ThemedText>
-        </TouchableOpacity>
-      </ThemedView>
-    </ScrollView>
+        {/* ウィジェット表示 */}
+        <View style={styles.formGroup}>
+          <View style={styles.switchContainer}>
+            <Text style={[styles.label, dynamicStyles.label]}>ウィジェットに表示</Text>
+            <Switch
+              value={showInWidget}
+              onValueChange={setShowInWidget}
+              trackColor={{ false: '#E0E0E0', true: isDarkMode ? 'rgba(76, 175, 80, 0.5)' : '#A5D6A7' }}
+              thumbColor={showInWidget ? colors.primary : isDarkMode ? '#888888' : '#F5F5F5'}
+            />
+          </View>
+        </View>
+        
+        {/* 送信ボタン */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[styles.button, styles.cancelButton, { borderColor: colors.border }]}
+            onPress={() => router.back()}
+            disabled={isSubmitting}
+          >
+            <Text style={[styles.cancelButtonText, { color: colors.secondaryText }]}>キャンセル</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[
+              styles.button,
+              styles.submitButton,
+              { backgroundColor: colors.primary },
+              !isFormValid() && [styles.disabledButton, { backgroundColor: isDarkMode ? '#555555' : '#BDBDBD' }],
+            ]}
+            onPress={handleCreateEvent}
+            disabled={!isFormValid() || isSubmitting}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.submitButtonText}>作成</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -250,114 +371,119 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  titleContainer: {
-    marginTop: 20,
-    marginBottom: 16,
-  },
-  description: {
-    marginBottom: 24,
-    fontSize: 16,
-  },
-  formContainer: {
-    marginBottom: 40,
-  },
   formGroup: {
     marginBottom: 24,
   },
   label: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#F5F5F5',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  inputDark: {
-    backgroundColor: '#2C2C2E',
-    borderColor: '#3A3A3C',
-    color: '#FFFFFF',
   },
   textArea: {
-    minHeight: 100,
+    height: 100,
+    textAlignVertical: 'top',
   },
-  dateInput: {
-    backgroundColor: '#F5F5F5',
+  datePickerButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     borderRadius: 8,
     padding: 12,
-    fontSize: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  dateInputDark: {
-    backgroundColor: '#2C2C2E',
-    borderColor: '#3A3A3C',
-  },
-  dateIcon: {
-    marginRight: 8,
-  },
-  colorOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  colorOption: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  selectedColorOption: {
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.5,
-    elevation: 2,
   },
   switchContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  repeatOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 12,
-  },
-  repeatOption: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    backgroundColor: '#F0F0F0',
-  },
-  selectedRepeatOption: {
-    backgroundColor: Colors.light.tint,
-  },
-  repeatOptionText: {
-    color: '#666',
-  },
-  selectedRepeatOptionText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  createButton: {
-    backgroundColor: Colors.light.tint,
+  repeatContainer: {
+    marginTop: 16,
     borderRadius: 8,
     padding: 16,
-    alignItems: 'center',
-    marginTop: 16,
   },
-  createButtonText: {
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 12,
+  },
+  repeatTypeContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 16,
+  },
+  repeatTypeButton: {
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginRight: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+  },
+  repeatTypeButtonActive: {
+    borderWidth: 1,
+  },
+  repeatTypeText: {
+    fontSize: 14,
+  },
+  repeatTypeTextActive: {
+    fontWeight: 'bold',
+  },
+  repeatIntervalContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  repeatIntervalLabel: {
+    fontSize: 14,
+    marginRight: 8,
+  },
+  repeatIntervalInput: {
+    width: 60,
+    height: 40,
+    borderRadius: 4,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    textAlign: 'center',
+  },
+  repeatIntervalUnit: {
+    marginLeft: 8,
+    fontSize: 14,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    marginBottom: 32,
+  },
+  button: {
+    flex: 1,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelButton: {
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  submitButton: {
+    marginLeft: 8,
+  },
+  submitButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
+  },
+  disabledButton: {
+    opacity: 0.7,
   },
 });

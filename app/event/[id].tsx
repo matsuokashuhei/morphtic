@@ -1,237 +1,260 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { format } from 'date-fns';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Share, ActivityIndicator } from 'react-native';
+import { useLocalSearchParams, Stack, router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { formatDistance } from 'date-fns';
 
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import { IconSymbol } from '@/components/ui/IconSymbol';
-import { Colors } from '@/constants/Colors';
-import { useColorScheme } from '@/hooks/useColorScheme';
+// コンポーネント
+import ProgressBar from '@/src/components/common/ProgressBar';
+import WidgetPreview from '@/src/components/widgets/WidgetPreview';
 
-// Mock data - in a real app, this would come from a database or state management
-const MOCK_EVENTS = [
-  {
-    id: '1',
-    name: 'Life Span',
-    startDate: new Date(1990, 0, 1),
-    endDate: new Date(2090, 0, 1),
-    color: '#4A90E2',
-    progress: 0.41,
-    description: 'Visualizing my entire life span to make the most of every day.',
-    isRepeat: false,
-    repeatFrequency: null,
-  },
-  {
-    id: '2',
-    name: 'Current Project',
-    startDate: new Date(2025, 2, 1),
-    endDate: new Date(2025, 6, 30),
-    color: '#E2844A',
-    progress: 0.35,
-    description: 'Timeline for completing the current project with all milestones.',
-    isRepeat: false,
-    repeatFrequency: null,
-  },
-  {
-    id: '3',
-    name: '2025 Goals',
-    startDate: new Date(2025, 0, 1),
-    endDate: new Date(2025, 11, 31),
-    color: '#50C878',
-    progress: 0.23,
-    description: 'Tracking progress on my personal and professional goals for 2025.',
-    isRepeat: false,
-    repeatFrequency: null,
-  },
-  {
-    id: '4',
-    name: 'Annual Family Trip',
-    startDate: new Date(2025, 6, 1),
-    endDate: new Date(2025, 6, 14),
-    color: '#9370DB',
-    progress: 0,
-    description: 'Planning and countdown for our annual family vacation.',
-    isRepeat: true,
-    repeatFrequency: 'yearly',
-  },
-];
+// コンテキスト
+import { useEvents } from '@/src/context/EventContext';
+import { useTheme } from '@/src/context/ThemeContext';
+
+// ユーティリティ
+import { calculateTimeLeft } from '@/src/utils/dateUtils';
+import { getEventStatus } from '@/src/utils/progressUtils';
 
 export default function EventDetailScreen() {
-  const params = useLocalSearchParams();
-  const router = useRouter();
-  const colorScheme = useColorScheme();
-  const eventId = params.id as string;
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { getEvent, deleteEvent } = useEvents();
+  const { colors } = useTheme();
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
   
-  const [event, setEvent] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
+  const event = getEvent(id);
   
-  useEffect(() => {
-    // In a real app, fetch the event data from a database
-    const foundEvent = MOCK_EVENTS.find(e => e.id === eventId);
-    setEvent(foundEvent || null);
-  }, [eventId]);
-  
+  // イベントが存在しない場合
   if (!event) {
     return (
-      <ThemedView style={styles.container}>
-        <ThemedText>Event not found</ThemedText>
-      </ThemedView>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <Text style={{ color: colors.text }}>イベントが見つかりませんでした</Text>
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: colors.primary, marginTop: 20 }]}
+          onPress={() => router.back()}
+        >
+          <Text style={{ color: 'white' }}>戻る</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
   
-  const formatDateRange = (start, end) => {
-    return `${format(start, 'MMM d, yyyy')} - ${format(end, 'MMM d, yyyy')}`;
-  };
+  const startDate = new Date(event.startDate);
+  const endDate = new Date(event.endDate);
+  const status = getEventStatus(startDate, endDate);
   
-  const calculateDaysRemaining = (endDate) => {
-    const today = new Date();
-    const end = new Date(endDate);
-    const diffTime = end.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays > 0 ? diffDays : 0;
-  };
+  // 残り時間の計算
+  const { days, hours, minutes } = calculateTimeLeft(endDate);
+  const isCompleted = status === 'completed';
+  const isNotStarted = status === 'not_started';
   
-  const renderProgressBar = (progress, color) => {
-    const progressPercentage = Math.round(progress * 100);
-    
-    return (
-      <ThemedView style={styles.progressContainer}>
-        <ThemedView 
-          style={[
-            styles.progressBar, 
-            { backgroundColor: colorScheme === 'dark' ? '#444' : '#E0E0E0' }
-          ]}
-        >
-          <ThemedView 
-            style={[
-              styles.progressFill, 
-              { 
-                width: `${progressPercentage}%`,
-                backgroundColor: color,
-              }
-            ]} 
-          />
-        </ThemedView>
-        <ThemedText style={styles.progressText}>{progressPercentage}%</ThemedText>
-      </ThemedView>
-    );
-  };
+  // 時間表示文字列の生成
+  let timeLeftText = '';
   
+  if (isCompleted) {
+    timeLeftText = '完了';
+  } else if (isNotStarted) {
+    timeLeftText = `開始まで ${formatDistance(startDate, new Date(), { addSuffix: false })}`;
+  } else if (days > 0) {
+    timeLeftText = `残り ${days}日 ${hours}時間`;
+  } else {
+    timeLeftText = `残り ${hours}時間 ${minutes}分`;
+  }
+  
+  // 削除ハンドラ
   const handleDelete = () => {
     Alert.alert(
-      "Delete Event",
-      "Are you sure you want to delete this event?",
+      '削除の確認',
+      'このイベントを削除してもよろしいですか？',
       [
+        { text: 'キャンセル', style: 'cancel' },
         {
-          text: "Cancel",
-          style: "cancel"
+          text: '削除',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsDeleting(true);
+              await deleteEvent(id);
+              router.back();
+            } catch (error) {
+              console.error('Failed to delete event:', error);
+              Alert.alert('エラー', 'イベントの削除に失敗しました');
+              setIsDeleting(false);
+            }
+          },
         },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            // In a real app, delete from database
-            router.replace('/(tabs)');
-          }
-        }
       ]
     );
   };
   
-  const handleEdit = () => {
-    setIsEditing(true);
+  // 共有ハンドラ
+  const handleShare = async () => {
+    try {
+      const startDateStr = startDate.toLocaleDateString();
+      const endDateStr = endDate.toLocaleDateString();
+      
+      await Share.share({
+        message: `${event.name}\n期間: ${startDateStr} 〜 ${endDateStr}\n「タイムプログレス」アプリで時間の経過を可視化しよう！`,
+      });
+    } catch (error) {
+      console.error('Failed to share:', error);
+    }
   };
   
-  const handleSave = () => {
-    // In a real app, save to database
-    setIsEditing(false);
-    // For now, just exit edit mode
+  // 編集画面に遷移
+  const handleEdit = () => {
+    // 将来的に編集画面に遷移
+    Alert.alert('Info', '編集機能は開発中です');
+  };
+  
+  // 動的スタイル
+  const dynamicStyles = {
+    container: {
+      backgroundColor: colors.background,
+    },
+    progressSection: {
+      backgroundColor: colors.card,
+    },
+    timeLeft: {
+      color: colors.text,
+    },
+    dates: {
+      color: colors.secondaryText,
+    },
+    detailsSection: {
+      backgroundColor: colors.background,
+    },
+    detailLabel: {
+      color: colors.secondaryText,
+    },
+    description: {
+      color: colors.text,
+    },
+    detailText: {
+      color: colors.text,
+    },
+    widgetPreviewSection: {
+      backgroundColor: colors.card,
+    },
+    sectionTitle: {
+      color: colors.text,
+    },
+    deleteButton: {
+      backgroundColor: colors.error,
+    },
   };
   
   return (
-    <>
+    <ScrollView style={[styles.container, dynamicStyles.container]}>
       <Stack.Screen 
         options={{
-          title: isEditing ? "Edit Event" : event.name,
+          title: event.name,
           headerRight: () => (
-            isEditing ? (
-              <TouchableOpacity onPress={handleSave} style={styles.headerButton}>
-                <ThemedText style={styles.headerButtonText}>Save</ThemedText>
+            <View style={styles.headerButtons}>
+              <TouchableOpacity style={styles.headerButton} onPress={handleShare}>
+                <Ionicons name="share-outline" size={24} color={colors.text} />
               </TouchableOpacity>
-            ) : (
-              <TouchableOpacity onPress={handleEdit} style={styles.headerButton}>
-                <IconSymbol name="pencil" size={20} color={Colors[colorScheme ?? 'light'].tint} />
+              <TouchableOpacity style={styles.headerButton} onPress={handleEdit}>
+                <Ionicons name="create-outline" size={24} color={colors.text} />
               </TouchableOpacity>
-            )
-          )
+            </View>
+          ),
         }} 
       />
       
-      <ScrollView style={styles.container}>
-        {!isEditing ? (
-          // View Mode
-          <ThemedView style={styles.content}>
-            <ThemedView style={[styles.colorBadge, { backgroundColor: event.color }]} />
-            
-            <ThemedView style={styles.section}>
-              <ThemedText style={styles.dateRange}>
-                {formatDateRange(event.startDate, event.endDate)}
-              </ThemedText>
-              
-              {renderProgressBar(event.progress, event.color)}
-            </ThemedView>
-            
-            <ThemedView style={styles.section}>
-              <ThemedText style={styles.sectionTitle}>Description</ThemedText>
-              <ThemedText style={styles.description}>{event.description || 'No description'}</ThemedText>
-            </ThemedView>
-            
-            <ThemedView style={styles.section}>
-              <ThemedText style={styles.sectionTitle}>Stats</ThemedText>
-              
-              <ThemedView style={styles.statRow}>
-                <ThemedView style={styles.stat}>
-                  <ThemedText style={styles.statValue}>{calculateDaysRemaining(event.endDate)}</ThemedText>
-                  <ThemedText style={styles.statLabel}>Days Remaining</ThemedText>
-                </ThemedView>
-                
-                <ThemedView style={styles.stat}>
-                  <ThemedText style={styles.statValue}>
-                    {event.isRepeat ? 'Yes' : 'No'}
-                  </ThemedText>
-                  <ThemedText style={styles.statLabel}>Repeating</ThemedText>
-                </ThemedView>
-              </ThemedView>
-            </ThemedView>
-            
-            <TouchableOpacity 
-              style={styles.deleteButton}
-              onPress={handleDelete}
-            >
-              <IconSymbol name="trash" size={20} color="#FF3B30" />
-              <ThemedText style={styles.deleteButtonText}>Delete Event</ThemedText>
-            </TouchableOpacity>
-          </ThemedView>
-        ) : (
-          // Edit Mode - In a real app, this would be a form
-          <ThemedView style={styles.content}>
-            <ThemedText style={styles.editMessage}>
-              This is a placeholder for the event editing form.
-              In a complete app, this would include:
-            </ThemedText>
-            
-            <ThemedView style={styles.editPlaceholder}>
-              <ThemedText>• Event name input</ThemedText>
-              <ThemedText>• Date pickers for start/end dates</ThemedText>
-              <ThemedText>• Color selector</ThemedText>
-              <ThemedText>• Description input</ThemedText>
-              <ThemedText>• Repeat settings</ThemedText>
-            </ThemedView>
-          </ThemedView>
+      {/* プログレス表示 */}
+      <View style={[styles.progressSection, dynamicStyles.progressSection]}>
+        <View style={styles.progressHeader}>
+          <Text style={[styles.timeLeft, dynamicStyles.timeLeft]}>{timeLeftText}</Text>
+          <Text style={[styles.dates, dynamicStyles.dates]}>
+            {startDate.toLocaleDateString()} 〜 {endDate.toLocaleDateString()}
+          </Text>
+        </View>
+        
+        <ProgressBar
+          startDate={startDate}
+          endDate={endDate}
+          color={event.color}
+          height={12}
+          showPercentage
+          animationDuration={1500}
+        />
+      </View>
+      
+      {/* イベント詳細 */}
+      <View style={[styles.detailsSection, dynamicStyles.detailsSection]}>
+        {/* 説明 */}
+        {event.description && (
+          <View style={styles.detailItem}>
+            <Text style={[styles.detailLabel, dynamicStyles.detailLabel]}>説明</Text>
+            <Text style={[styles.description, dynamicStyles.description]}>{event.description}</Text>
+          </View>
         )}
-      </ScrollView>
-    </>
+        
+        {/* 状態 */}
+        <View style={styles.detailItem}>
+          <Text style={[styles.detailLabel, dynamicStyles.detailLabel]}>状態</Text>
+          <View style={styles.statusContainer}>
+            <View style={[styles.statusIndicator, styles[`status_${status}`]]} />
+            <Text style={[styles.statusText, dynamicStyles.detailText]}>
+              {status === 'not_started'
+                ? '開始前'
+                : status === 'in_progress'
+                ? '進行中'
+                : '完了'}
+            </Text>
+          </View>
+        </View>
+        
+        {/* 繰り返し */}
+        {event.repeat && event.repeat.type !== 'none' && (
+          <View style={styles.detailItem}>
+            <Text style={[styles.detailLabel, dynamicStyles.detailLabel]}>繰り返し</Text>
+            <Text style={[styles.detailText, dynamicStyles.detailText]}>
+              {event.repeat.type === 'daily'
+                ? `${event.repeat.interval}日ごと`
+                : event.repeat.type === 'weekly'
+                ? `${event.repeat.interval}週間ごと`
+                : event.repeat.type === 'monthly'
+                ? `${event.repeat.interval}ヶ月ごと`
+                : `${event.repeat.interval}年ごと`}
+            </Text>
+          </View>
+        )}
+        
+        {/* ウィジェット表示 */}
+        <View style={styles.detailItem}>
+          <Text style={[styles.detailLabel, dynamicStyles.detailLabel]}>ウィジェット表示</Text>
+          <Text style={[styles.detailText, dynamicStyles.detailText]}>
+            {event.showInWidget ? '表示' : '非表示'}
+          </Text>
+        </View>
+      </View>
+      
+      {/* ウィジェットプレビュー */}
+      {event.showInWidget && (
+        <View style={[styles.widgetPreviewSection, dynamicStyles.widgetPreviewSection]}>
+          <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>ウィジェットプレビュー</Text>
+          <WidgetPreview event={event} />
+        </View>
+      )}
+      
+      {/* 削除ボタン */}
+      <TouchableOpacity
+        style={[styles.deleteButton, dynamicStyles.deleteButton]}
+        onPress={handleDelete}
+        disabled={isDeleting}
+      >
+        {isDeleting ? (
+          <ActivityIndicator size="small" color="#FFFFFF" />
+        ) : (
+          <>
+            <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+            <Text style={styles.deleteButtonText}>イベントを削除</Text>
+          </>
+        )}
+      </TouchableOpacity>
+    </ScrollView>
   );
 }
 
@@ -239,99 +262,96 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
-    padding: 16,
-  },
-  colorBadge: {
-    height: 12,
-    width: '100%',
-    borderRadius: 6,
-    marginBottom: 16,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  dateRange: {
-    fontSize: 16,
-    marginBottom: 12,
-  },
-  description: {
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  progressBar: {
+  loadingContainer: {
     flex: 1,
-    height: 12,
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 6,
-  },
-  progressText: {
-    marginLeft: 12,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  stat: {
-    alignItems: 'center',
-    width: '48%',
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#666',
-  },
-  deleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FF3B30',
-    marginTop: 24,
+    alignItems: 'center',
+    padding: 20,
   },
-  deleteButtonText: {
-    color: '#FF3B30',
-    marginLeft: 8,
-    fontSize: 16,
-    fontWeight: '600',
+  button: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  headerButtons: {
+    flexDirection: 'row',
   },
   headerButton: {
     padding: 8,
   },
-  headerButtonText: {
-    color: Colors.light.tint,
-    fontWeight: '600',
-    fontSize: 16,
+  progressSection: {
+    padding: 20,
   },
-  editMessage: {
-    fontSize: 16,
+  progressHeader: {
     marginBottom: 16,
   },
-  editPlaceholder: {
-    backgroundColor: '#f5f5f5',
+  timeLeft: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  dates: {
+    fontSize: 14,
+    marginBottom: 12,
+  },
+  detailsSection: {
+    padding: 20,
+  },
+  detailItem: {
+    marginBottom: 20,
+  },
+  detailLabel: {
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  description: {
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  detailText: {
+    fontSize: 16,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  status_not_started: {
+    backgroundColor: '#FFC107', // Amber
+  },
+  status_in_progress: {
+    backgroundColor: '#4CAF50', // Green
+  },
+  status_completed: {
+    backgroundColor: '#9E9E9E', // Grey
+  },
+  statusText: {
+    fontSize: 16,
+  },
+  widgetPreviewSection: {
+    padding: 20,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  deleteButton: {
+    margin: 20,
     padding: 16,
     borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
 });
