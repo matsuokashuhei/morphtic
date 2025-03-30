@@ -1,18 +1,30 @@
 {
-  "name": "typescript-node:20",
-  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
-  "postCreateCommand": "./.devcontainer/postCreateCommand.sh",
-  "mounts": [
-    "source=node_modules_${devcontainerId},target=${containerWorkspaceFolder}/node_modules,type=volume"
+  "name": "react-native",
+  "dockerComposeFile": [
+    // "docker-compose.yml",
+    "../../compose.yml"
   ],
-  "forwardPorts": [8081],
-  "runArgs": ["-p=8081:8081", "--env-file", ".devcontainer/.env"],
+  "service": "react-native",
+  "workspaceFolder": "/morphtic/react-native",
+  // "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
+  "postCreateCommand": "./.devcontainer/postCreateCommand.sh",
+  // "postCreateCommand": "./react-native/.devcontainer/postCreateCommand.sh",
+  // "postCreateCommand": "pwd",
+  // "mounts": [
+  //   "source=node_modules_${devcontainerId},target=${containerWorkspaceFolder}/node_modules,type=volume"
+  // ],
+  // "forwardPorts": [8081],
+  // "runArgs": ["-p=8081:8081", "--env-file", ".devcontainer/.env"],
   "features": {
     "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
   },
   "customizations": {
     "vscode": {
-      "extensions": ["biomejs.biome", "saoudrizwan.claude-dev"],
+      "extensions": [
+        "biomejs.biome",
+        "saoudrizwan.claude-dev",
+        "msjsdiag.vscode-react-native"
+      ],
       "settings": {
         "editor.formatOnSave": true,
         "editor.codeActionsOnSave": {
