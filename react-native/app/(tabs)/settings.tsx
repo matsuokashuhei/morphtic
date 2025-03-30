@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/src/context/ThemeContext';
-import { Stack } from 'expo-router';
+import { useAuth } from '@/src/context/AuthContext';
+import { Stack, useRouter } from 'expo-router';
 
 const SettingItem = ({ icon, title, description, value, onValueChange, type = 'switch' }) => {
   const { colors } = useTheme();
@@ -57,7 +58,9 @@ const SettingItem = ({ icon, title, description, value, onValueChange, type = 's
 };
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const { theme, setTheme, colors, isDarkMode } = useTheme();
+  const { signOut, user } = useAuth();
   
   // 設定状態
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -129,10 +132,14 @@ export default function SettingsScreen() {
         {
           text: 'ログアウト',
           style: 'destructive',
-          onPress: () => {
-            // ログアウト処理
-            // この実装では簡単にAlertで知らせるだけ
-            Alert.alert('Info', 'ログアウト機能は開発中です');
+          onPress: async () => {
+            try {
+              await signOut();
+              // サインアウト成功後、ログイン画面に遷移
+              router.push('/auth/signin');
+            } catch (err) {
+              Alert.alert('エラー', 'ログアウトに失敗しました。時間をおいて再度お試しください。');
+            }
           },
         },
       ]
@@ -199,6 +206,21 @@ export default function SettingsScreen() {
           />
         </View>
       </View>
+      
+      {/* ユーザー情報 */}
+      {user && (
+        <View style={styles.userInfoContainer}>
+          <View style={[styles.iconContainer, { backgroundColor: colors.primary, width: 60, height: 60 }]}>
+            <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold' }}>
+              {user.name ? user.name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+          <View style={styles.userInfoTextContainer}>
+            <Text style={[styles.userName, { color: colors.text }]}>{user.name || 'ユーザー'}</Text>
+            <Text style={[styles.userEmail, { color: colors.secondaryText }]}>{user.email}</Text>
+          </View>
+        </View>
+      )}
       
       {/* アカウント設定 */}
       <View style={styles.section}>
@@ -323,5 +345,23 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     marginHorizontal: 16,
+  },
+  userInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    marginBottom: 24,
+    backgroundColor: 'transparent',
+  },
+  userInfoTextContainer: {
+    marginLeft: 15,
+  },
+  userName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  userEmail: {
+    fontSize: 14,
   },
 });

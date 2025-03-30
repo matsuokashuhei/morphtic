@@ -91,10 +91,24 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   ): Promise<Event> => {
     try {
       const now = new Date();
+      // AuthContextからユーザーIDを取得（可能な場合）
+      let userId = 'local-user';
+      try {
+        // この部分は後ほどimport { useAuth } from './AuthContext'を追加した際に
+        // useAuth関数を使ってユーザーIDを取得するように修正します
+        const authUser = await AsyncStorage.getItem('auth_user');
+        if (authUser) {
+          const parsedUser = JSON.parse(authUser);
+          userId = parsedUser.id || 'local-user';
+        }
+      } catch (err) {
+        console.error('Failed to get user ID:', err);
+      }
+
       const newEvent: Event = {
         ...eventData,
         id: uuidv4(),
-        userId: 'local-user', // 将来的にはCognitoのユーザーIDに置き換え
+        userId: userId,
         createdAt: now,
         updatedAt: now,
       };

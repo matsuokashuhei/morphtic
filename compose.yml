@@ -32,7 +32,7 @@ services:
       - 5052:5052 # OAuth2 SSL endpoint
     environment:
       COGNITO_USER_POOL_ID: ap-northeast-1_morphtic
-      COGNITO_USER_POOL_CLIENT_ID: react-native
+      COGNITO_USER_POOL_CLIENT_ID: reactnative
       COGNITO_ACCESS_KEY: magnito-access-key
       COGNITO_SECRET_KEY: magnito-secret-key
       COGNITO_REGION: ap-northeast-1

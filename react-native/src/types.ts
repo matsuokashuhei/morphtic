@@ -1,3 +1,59 @@
+// Auth 関連の型定義
+export interface AuthUser {
+  id: string;                 // Cognito User ID (sub)
+  email: string;
+  name?: string;
+  phone_number?: string;
+  email_verified: boolean;
+  preferred_username?: string;
+  custom_attributes?: Record<string, any>;
+}
+
+export type AuthStatus = 'CHECKING' | 'AUTHENTICATED' | 'UNAUTHENTICATED';
+
+export interface AuthState {
+  user: AuthUser | null;
+  status: AuthStatus;
+  error: string | null;
+}
+
+export interface SignUpForm {
+  email: string;
+  password: string;
+  name?: string;
+}
+
+export interface SignInForm {
+  email: string;
+  password: string;
+}
+
+export interface ResetPasswordForm {
+  email: string;
+}
+
+export interface ConfirmResetPasswordForm {
+  email: string;
+  code: string;
+  newPassword: string;
+}
+
+export interface ConfirmSignUpForm {
+  email: string;
+  code: string;
+}
+
+export interface UpdatePasswordForm {
+  oldPassword: string;
+  newPassword: string;
+}
+
+export interface UpdateUserAttributesForm {
+  name?: string;
+  email?: string;
+  phone_number?: string;
+}
+
 // Event モデル
 export interface EventNotification {
   type: 'percent' | 'time';
