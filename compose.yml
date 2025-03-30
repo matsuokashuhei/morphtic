@@ -15,3 +15,15 @@ services:
     command: sleep infinity
     env_file:
       - ./react-native/.devcontainer/.env
+  dynamodb-local:
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath ./data"
+    image: "amazon/dynamodb-local:latest"
+    container_name: dynamodb-local
+    ports:
+      - "8000:8000"
+    volumes:
+      - "./dynamodb-local:/home/dynamodb-local/data"
+    working_dir: /home/dynamodb-local
+volumes:
+  dynamodb-local:
+    driver: local
